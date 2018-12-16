@@ -43,7 +43,7 @@ def fix_parameters(mch, params, K, lambda_, lambda1, lambda2):
     if lambda2 < 0:
         lambda2 = lambda_
     params = set_fractions(params, K, lambda1, lambda2)
-    mch.SetParameters(params)
+    mch.setParameters(params)
     return mch
 
 

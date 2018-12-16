@@ -115,6 +115,7 @@ class Match:
     def setParameters(self, params):
         self.params = params
         self.initSubPixel()
+        return
 
     def getK(self):
         return 23.7195

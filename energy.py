@@ -7,16 +7,16 @@ class Energy(object):
         self.graph = maxflow.Graph[int](hintNbNodes, hintNbArcs)
         self.Econst = 0
 
-    def add_term1(self, node_id, weigh_s, weight_t):
+    def add_term1(self, node_id, weight_s, weight_t):
         """
         Add a term E(x) of one binary variable to the energy function, where
         E(0)=E0, E(1)=E1. E0 and E1 can be arbitrary.
         :param node_id:
-        :param weigh_s:
+        :param weight_s:
         :param weight_t:
         :return: void
         """
-        self.graph.add_tedge(node_id, weigh_s, weight_t)
+        self.graph.add_tedge(node_id, weight_t, weight_s)
 
         return
 

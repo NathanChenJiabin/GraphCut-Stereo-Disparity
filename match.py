@@ -3,6 +3,7 @@ import maxflow
 from PIL import Image
 from matplotlib import pyplot as plt
 from pylab import *
+import energy
 import cv2
 
 
@@ -40,8 +41,8 @@ class Match:
         self.imSizeR = (height, imgR.shape[1])  # right image dimensions
 
         if color:
-            self.imColorL = imgL
-            self.imColorR = imgR
+            self.imgL = imgL
+            self.imgR = imgR
         else:
             self.imgL = imgL
             self.imgR = imgR
@@ -54,55 +55,132 @@ class Match:
         self.varsA = np.zeros(shape=self.imSizeL, dtype=np.int8)  # Variables after alpha expansion
         self.OCCLUDED = CONST()  # Special value of disparity meaning occlusion
 
-        def setParameters(params):
-            self.params = params
+    def SetDispRange(self, dMin, dMax):
+        """
+         Specify disparity range
+         :param dMin: int
+         :param dMax: int
+         :return: void
+        """
+        self.dispMin = dMin
+        self.dispMax = dMax
+        self.disparityL = np.ones_like(self.disparityL, dtype=np.int64) * self.OCCLUDED.val
 
-        def run():
-            pass
+    def setParameters(self, params):
+        self.params = params
 
-        def initSubPixel():
-            pass
+    def run(self):
+        """
+        Main algorithm: run a series of alpha-expansions
+        :return: void
+        """
+        dispSize = self.dispMax - self.dispMin + 1
+        permutation = np.random.permutation(dispSize)  # random permutation
 
-        # Data penalty functions
+        self.currentEnergy = self.ComputeEnergy()
+        print("Initial energy : " + str(self.currentEnergy))
 
-        def data_penalty_gray(coordL, coordR):
-            pass
+        done = np.full(dispSize, False)
+        nDone = dispSize  # number of False in done
 
-        def data_penalty_color(coordL, coordR):
-            pass
+        step = 0
+        for iteration in range(self.params.maxIter):
+            if nDone <= 0:
+                break
 
-        # Smoothness penalty functions
-        def smoothness_penalty_gray(coordP, coordNp, d):
-            pass
+            for idx in range(dispSize):
+                label = permutation[idx]
 
-        def smoothness_penalty_color(coordP, coordNp, d):
-            pass
+                if done[label]:
+                    continue
 
-        # Kolmogorov-Zabih algorithm
-        def data_occlusion_penalty(coordL, coordR):
-            pass
+                step += 1
+                if self.ExpansionMove(self.dispMin + label):
+                    done = np.full(dispSize, False)
+                    nDone = dispSize
 
-        def smoothness_penalty(coordP, coordNp, d):
-            pass
+                done[label] = True
+                nDone -= 1
 
-        def ComputeEnergy():
-            pass
+            print("Energy :" + str(self.currentEnergy))
 
-        def ExpansionMove(alpha):
-            pass
+        print(str(step / dispSize) + "iterations...")
 
-        # Graph construction
-        def build_nodes(energy, coordP, alpha):
-            pass
+    def initSubPixel(self):
+        pass
 
-        def build_smoothness(energy, coordP, coordNp, alpha):
-            pass
+    # Data penalty functions
 
-        def build_uniqueness(energy, coordP, alpha):
-            pass
+    def data_penalty_gray(self, coordL, coordR):
+        pass
 
-        def update_disparity(energy, alpha):
-            pass
+    def data_penalty_color(self, coordL, coordR):
+        pass
 
-        def kolmogorov_zabih():
-            pass
+    # Smoothness penalty functions
+    def smoothness_penalty_gray(self, coordP, coordNp, d):
+        pass
+
+    def smoothness_penalty_color(self, coordP, coordNp, d):
+        pass
+
+    # Kolmogorov-Zabih algorithm
+    def data_occlusion_penalty(self, coordL, coordR):
+        pass
+
+    def smoothness_penalty(self, coordP, coordNp, d):
+        pass
+
+    def ComputeEnergy(self):
+        return 0
+
+    def ExpansionMove(self, alpha):
+        """
+        Compute the minimum a-expansion configuration
+        :param alpha: int
+        :return: bool, whether the move is different from identity
+        """
+        nb = self.imSizeL[0] * self.imSizeL[1]
+        e = energy.Energy(2 * nb, 12 * nb)
+
+        # Build Graph
+        for index, x in np.ndenumerate(self.imgL):
+            self.build_nodes(e, index, alpha)
+
+        # TODO: smooth term
+
+        for index, x in np.ndenumerate(self.imgL):
+            self.build_uniqueness(e, index, alpha)
+
+        oldEnergy = self.currentEnergy
+        # Max-flow, give the lowest-energy expansion move
+        self.currentEnergy = e.minimize()
+
+        # lower energy, accept the expansion move
+        if self.currentEnergy < oldEnergy:
+            self.update_disparity(e, alpha)
+            assert (self.ComputeEnergy() == self.currentEnergy)
+            return True
+
+        return False
+
+    # Graph construction
+    def build_nodes(self, energy, coordP, alpha):
+        pass
+
+    def build_smoothness(self, energy, coordP, coordNp, alpha):
+        pass
+
+    def build_uniqueness(self, energy, coordP, alpha):
+        pass
+
+    def update_disparity(self, energy, alpha):
+        pass
+
+    def kolmogorov_zabih(self):
+        # verify parameters
+
+        # print parameters
+
+        self.run()
+        return

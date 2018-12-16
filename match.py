@@ -1,6 +1,7 @@
 import energy
 import numpy as np
 import preprocessing
+import cv2
 
 # Define global variables
 VAR_ALPHA = -1
@@ -70,7 +71,7 @@ class Match:
         :param imgRight: right input image
         :param color: is input image color ?
         """
-        # originalHeightL = imgL.shape[0]
+        self.originalHeightL = imgLeft.shape[0]
         height = min(imgLeft.shape[0], imgRight.shape[0])
         self.imSizeL = (height, imgLeft.shape[1])  # left image dimensions
         self.imSizeR = (height, imgRight.shape[1])  # right image dimensions
@@ -116,10 +117,35 @@ class Match:
         self.initSubPixel()
 
     def getK(self):
-        return 10
+        return 23.7195
 
     def saveDisparity(self, filename):
-        pass
+        """
+        save scaled disparity map as 8-bit color image (gray between 64 and 255)
+        """
+        im = np.zeros(shape=(self.originalHeightL, self.imSizeL[1], 3))
+        iterP = np.zeros(shape=(self.originalHeightL, self.imSizeL[1]))
+        for idx, _ in np.ndenumerate(iterP):
+            im[idx[0], idx[1], 0] = 0
+            im[idx[0], idx[1], 1] = 255
+            im[idx[0], idx[1], 2] = 255
+
+        dispSize = self.dispMax - self.dispMin + 1
+        iterP = np.zeros(self.imSizeL)
+        for idx, _ in np.ndenumerate(iterP):
+            d = self.disparityL[idx]
+            if d != self.OCCLUDED.val:
+                if dispSize == 0:
+                    c = 255
+                else:
+                    c = 255 - (255 - 64) * (self.dispMax - d) / dispSize
+                im[idx[0], idx[1], 0] = c
+                im[idx[0], idx[1], 1] = c
+                im[idx[0], idx[1], 2] = c
+
+        cv2.imwrite(filename, im)
+        print("Save disparity map successfully !")
+        return
 
     def run(self):
         """
@@ -246,7 +272,7 @@ class Match:
         dr = abs(self.imgR[coordP1[0], coordP1[1] + disp] - self.imgR[coordP2[0], coordP2[1] + disp])
 
         return self.params.lambda1 if (
-                    dl < self.params.edgeThresh and dr < self.params.edgeThresh) else self.params.lambda2
+                dl < self.params.edgeThresh and dr < self.params.edgeThresh) else self.params.lambda2
 
     def smoothness_penalty_color(self, coordP1, coordP2, disp):
         dMax = 0

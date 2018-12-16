@@ -54,7 +54,10 @@ def main(file1, file2, color, dispMin, dispMax):
     imgRight = cv2.imread(file2)
 
     # Default parameters
-    K = -1, lambda_ = -1, lambda1 = -1, lambda2 = -1
+    K = -1
+    lambda_ = 4.74391
+    lambda1 = -1
+    lambda2 = -1
     params = match.Parameters(is_L2=True,
                               denominator=1,
                               edgeThresh=8,
@@ -67,15 +70,15 @@ def main(file1, file2, color, dispMin, dispMax):
     m = match.Match(imgLeft, imgRight, color)
 
     m.SetDispRange(dispMin, dispMax)
-    m = fix_parameters(m, params, lambda_, lambda1, lambda2)
+    m = fix_parameters(m, params, K, lambda_, lambda1, lambda2)
     m.kolmogorov_zabih()
-    m.saveDisparity("../disparity.jpg")
+    m.saveDisparity("./disparity.jpg")
 
 
 if __name__ == '__main__':
-    filename_left = "../images/imgL.jpg"
-    filename_right = "../images/imgR.jpg"
+    filename_left = "./images/imgL.png"
+    filename_right = "./images/imgR.png"
     is_color = True
-    disMin = 0
+    disMin = -16
     disMax = 16
     main(filename_left, filename_right, is_color, disMin, disMax)

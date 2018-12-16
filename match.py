@@ -2,13 +2,11 @@ import energy
 import numpy as np
 import preprocessing
 
-
 # Define global variables
 VAR_ALPHA = -1
 VAR_ABSENT = -2
-VAR_a = 2
-VAR_o = 3
 NEIGHBORS = [(0, -1), (1, 0)]
+CUTOFF = 30
 
 
 def coord_add(coordP, coordQ):
@@ -32,19 +30,25 @@ def inRect(coordP, coordR):
     return 0 <= coordP[0] and 0 <= coordP[1] and coordP[0] < coordR[0] and coordP[1] < coordR[1]
 
 
-class Energy(object):
-    pass
+def dist_interval(v, mi, ma):
+    """
+    Distance from v to interval [min,max]
+    """
+    if v < mi:
+        return mi - v
+    if v > ma:
+        return v - ma
+    return 0
 
 
 class Parameters:
-    def __init__(self, L1, L2, denominator, edgeThresh, lambda1, lambda2, K, maxIter):
+    def __init__(self, is_L2, denominator, edgeThresh, lambda1, lambda2, K, maxIter):
         self.maxIter = maxIter
         self.K = K
         self.lambda2 = lambda2
         self.lambda1 = lambda1
         self.edgeThresh = edgeThresh
-        self.L2 = L2
-        self.L1 = L1
+        self.L2 = is_L2
         self.denominator = denominator
 
 
@@ -111,6 +115,12 @@ class Match:
         self.params = params
         self.initSubPixel()
 
+    def getK(self):
+        return 10
+
+    def saveDisparity(self, filename):
+        pass
+
     def run(self):
         """
         Main algorithm: run a series of alpha-expansions
@@ -175,17 +185,80 @@ class Match:
 
     # Data penalty functions
     def data_penalty_gray(self, coordL, coordR):
-        pass
+        """
+        Birchfield-Tomasi gray distance between pixels p and q
+        """
+        Ip = self.imgL[coordL]
+        Iq = self.imgR[coordR]
+
+        IpMin = self.imgLMin[coordL]
+        IqMin = self.imgRMin[coordR]
+
+        IpMax = self.imgLMax[coordL]
+        IqMax = self.imgRMax[coordR]
+
+        dp = dist_interval(Ip, IqMin, IqMax)
+        dq = dist_interval(Iq, IpMin, IpMax)
+        d = min(dp, dq)
+
+        if d > CUTOFF:
+            d = CUTOFF
+        if self.params.L2:
+            d = d * d
+
+        return d
 
     def data_penalty_color(self, coordL, coordR):
-        pass
+        """
+        Birchfield-Tomasi color distance between pixels p and q
+        """
+        dSum = 0
+        for i in range(3):
+            Ip = self.imgColorL[coordL]
+            Iq = self.imgColorR[coordR]
+
+            IpMin = self.imgColorLMin[coordL]
+            IqMin = self.imgColorRMin[coordR]
+
+            IpMax = self.imgColorLMax[coordL]
+            IqMax = self.imgColorRMax[coordR]
+
+            dp = dist_interval(Ip, IqMin, IqMax)
+            dq = dist_interval(Iq, IpMin, IpMax)
+            d = min(dp, dq)
+
+            if d > CUTOFF:
+                d = CUTOFF
+            if self.params.L2:
+                d = d * d
+            dSum += d
+
+        return dSum
 
     # Smoothness penalty functions
-    def smoothness_penalty_gray(self, coordP, coordNp, d):
-        pass
+    def smoothness_penalty_gray(self, coordP1, coordP2, disp):
+        """
+        Smoothness penalty between assignments (p1,p1+disp) and (p2,p2+disp).
+        """
+        # |I1(p1)-I1(p2)| and |I2(p1+disp)-I2(p2+disp)|
 
-    def smoothness_penalty_color(self, coordP, coordNp, d):
-        pass
+        dl = abs(self.imgL[coordP1] - self.imgL[coordP2])
+        dr = abs(self.imgR[coordP1[0], coordP1[1] + disp] - self.imgR[coordP2[0], coordP2[1] + disp])
+
+        return self.params.lambda1 if (
+                    dl < self.params.edgeThresh and dr < self.params.edgeThresh) else self.params.lambda2
+
+    def smoothness_penalty_color(self, coordP1, coordP2, disp):
+        dMax = 0
+        for i in range(3):
+            d = abs(self.imgColorL[coordP1[0], coordP1[1], i] - self.imgColorL[coordP2[0], coordP2[1], i])
+            if dMax < d:
+                dMax = d
+            d = abs(self.imgColorR[coordP1[0], coordP1[1] + disp, i] - self.imgColorR[coordP2[0], coordP2[1] + disp, i])
+            if dMax < d:
+                dMax = d
+
+        return self.params.lambda1 if dMax < self.params.edgeThresh else self.params.lambda2
 
     # Kolmogorov-Zabih algorithm
     def data_occlusion_penalty(self, coordL, coordR):
@@ -198,7 +271,7 @@ class Match:
         if self.color:
             D = self.data_penalty_color(coordL, coordR)
         else:
-            D =  self.data_penalty_gray(coordL, coordR)
+            D = self.data_penalty_gray(coordL, coordR)
 
         return self.params.denominator * D - self.params.K
 
@@ -225,7 +298,7 @@ class Match:
             d1 = self.disparityL[index]
 
             if d1 != self.OCCLUDED.val:
-                E += self.data_occlusion_penalty(index, (index[0], index[1]+d1))
+                E += self.data_occlusion_penalty(index, (index[0], index[1] + d1))
 
             for neighbor in NEIGHBORS:
                 coordP2 = coord_add(index, neighbor)
@@ -233,9 +306,9 @@ class Match:
                     d2 = self.disparityL[coordP2]
                     if d1 == d2:  # smoothness satisfied
                         continue
-                    if d1 != self.OCCLUDED.val and inRect((coordP2[0], coordP2[1]+d1), self.imSizeR):
+                    if d1 != self.OCCLUDED.val and inRect((coordP2[0], coordP2[1] + d1), self.imSizeR):
                         E += self.smoothness_penalty(index, coordP2, d1)
-                    if d2 != self.OCCLUDED.val and inRect((index[0], index[1]+d2), self.imSizeR):
+                    if d2 != self.OCCLUDED.val and inRect((index[0], index[1] + d2), self.imSizeR):
                         E += self.smoothness_penalty(index, coordP2, d2)
 
         return E

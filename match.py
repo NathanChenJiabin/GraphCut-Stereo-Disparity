@@ -1,10 +1,35 @@
-import numpy as np
-import maxflow
-from PIL import Image
-from matplotlib import pyplot as plt
-from pylab import *
 import energy
-import cv2
+import numpy as np
+import preprocessing
+
+
+# Define global variables
+VAR_ALPHA = -1
+VAR_ABSENT = -2
+VAR_a = 2
+VAR_o = 3
+NEIGHBORS = [(0, -1), (1, 0)]
+
+
+def coord_add(coordP, coordQ):
+    """
+
+    :param coordP:
+    :param coordQ:
+    :return:
+    """
+    res = (coordP[0] + coordQ[0], coordP[1] + coordQ[1])
+    return res
+
+
+def inRect(coordP, coordR):
+    """
+    Is p inside rectangle r?
+    :param coordP:
+    :param coordR:
+    :return:
+    """
+    return 0 <= coordP[0] and 0 <= coordP[1] and coordP[0] < coordR[0] and coordP[1] < coordR[1]
 
 
 class Energy(object):
@@ -34,18 +59,34 @@ class CONST(object):
 
 class Match:
 
-    def __init__(self, imgL, imgR, color=False):
+    def __init__(self, imgLeft, imgRight, color):
+        """
+        Constructor
+        :param imgLeft: left input image
+        :param imgRight: right input image
+        :param color: is input image color ?
+        """
         # originalHeightL = imgL.shape[0]
-        height = min(imgL.shape[0], imgR.shape[0])
-        self.imSizeL = (height, imgL.shape[1])  # left image dimensions
-        self.imSizeR = (height, imgR.shape[1])  # right image dimensions
-
+        height = min(imgLeft.shape[0], imgRight.shape[0])
+        self.imSizeL = (height, imgLeft.shape[1])  # left image dimensions
+        self.imSizeR = (height, imgRight.shape[1])  # right image dimensions
+        self.posIter = np.ones(shape=self.imSizeL)
+        self.color = color
         if color:
-            self.imgL = imgL
-            self.imgR = imgR
+            self.imgL = self.imgR = None
+            self.imgLMin = self.imgRMin = None
+            self.imgLMax = self.imgRMax = None
+            self.imgColorL = imgLeft
+            self.imgColorR = imgRight
+            self.imgColorLMin = self.imgColorLMax = None
+            self.imgColorRMin = self.imgColorRMax = None
         else:
-            self.imgL = imgL
-            self.imgR = imgR
+            self.imgColorL = self.imgColorR = None
+            self.imgColorLMin = self.imgColorMin = None
+            self.imgColorLMax = self.imgColorRMax = None
+            self.imgL = imgLeft
+            self.imgR = imgRight
+            self.imgLMin = self.imgLMax = self.imgRMin = self.imgRMax = None
 
         self.dispMin = self.dispMax = 0  # range of disparities
         self.currentEnergy = 0  # current energy
@@ -68,6 +109,7 @@ class Match:
 
     def setParameters(self, params):
         self.params = params
+        self.initSubPixel()
 
     def run(self):
         """
@@ -107,10 +149,31 @@ class Match:
         print(str(step / dispSize) + "iterations...")
 
     def initSubPixel(self):
-        pass
+        """
+        Preprocessing for faster Birchfield-Tomasi distance computation
+        :return: void
+        """
+        if (self.imgL is not None) and (self.imgLMin is None):
+            self.imgLMin = np.zeros(shape=self.imSizeL)
+            self.imgLMax = np.zeros(shape=self.imSizeL)
+            self.imgRMin = np.zeros(shape=self.imSizeR)
+            self.imgRMin = np.zeros(shape=self.imSizeR)
+
+            self.imgLMin, self.imgLMax = preprocessing.SubPixel(self.imgL, self.imgLMin.shape)
+            self.imgRMin, self.imgRMax = preprocessing.SubPixel(self.imgR, self.imgRMin.shape)
+
+        if (self.imgColorL is not None) and (self.imgColorLMin is None):
+            self.imgColorLMin = np.zeros(shape=(self.imSizeL[0], self.imSizeL[1], 3))
+            self.imgColorLMax = np.zeros(shape=(self.imSizeL[0], self.imSizeL[1], 3))
+            self.imgColorRMin = np.zeros(shape=(self.imSizeR[0], self.imSizeR[1], 3))
+            self.imgColorRMin = np.zeros(shape=(self.imSizeR[0], self.imSizeR[1], 3))
+
+            self.imgColorLMin, self.imgColorLMax = preprocessing.SubPixelColor(self.imgColorL, self.imgColorLMin.shape)
+            self.imgColorRMin, self.imgColorRMax = preprocessing.SubPixelColor(self.imgColorR, self.imgColorRMin.shape)
+
+        return
 
     # Data penalty functions
-
     def data_penalty_gray(self, coordL, coordR):
         pass
 
@@ -126,13 +189,56 @@ class Match:
 
     # Kolmogorov-Zabih algorithm
     def data_occlusion_penalty(self, coordL, coordR):
-        pass
+        """
+        Compute the data+occlusion penalty (D(a)-K)
+        :param coordL:
+        :param coordR:
+        :return:  int
+        """
+        if self.color:
+            D = self.data_penalty_color(coordL, coordR)
+        else:
+            D =  self.data_penalty_gray(coordL, coordR)
 
-    def smoothness_penalty(self, coordP, coordNp, d):
-        pass
+        return self.params.denominator * D - self.params.K
+
+    def smoothness_penalty(self, coordP1, coordP2, d):
+        """
+        Compute the smoothness penalty of assignments (p1,p1+d) and (p2,p2+d)
+        :param coordP1:
+        :param coordP2:
+        :param d:
+        :return: int
+        """
+        if self.color:
+            return self.smoothness_penalty_color(coordP1, coordP2, d)
+        else:
+            return self.smoothness_penalty_gray(coordP1, coordP2, d)
 
     def ComputeEnergy(self):
-        return 0
+        """
+        Compute current energy, we use this function only for sanity check
+        :return: current energy
+        """
+        E = 0
+        for index, _ in np.ndenumerate(self.posIter):
+            d1 = self.disparityL[index]
+
+            if d1 != self.OCCLUDED.val:
+                E += self.data_occlusion_penalty(index, (index[0], index[1]+d1))
+
+            for neighbor in NEIGHBORS:
+                coordP2 = coord_add(index, neighbor)
+                if inRect(coordP2, self.imSizeL):
+                    d2 = self.disparityL[coordP2]
+                    if d1 == d2:  # smoothness satisfied
+                        continue
+                    if d1 != self.OCCLUDED.val and inRect((coordP2[0], coordP2[1]+d1), self.imSizeR):
+                        E += self.smoothness_penalty(index, coordP2, d1)
+                    if d2 != self.OCCLUDED.val and inRect((index[0], index[1]+d2), self.imSizeR):
+                        E += self.smoothness_penalty(index, coordP2, d2)
+
+        return E
 
     def ExpansionMove(self, alpha):
         """
@@ -144,12 +250,19 @@ class Match:
         e = energy.Energy(2 * nb, 12 * nb)
 
         # Build Graph
-        for index, x in np.ndenumerate(self.imgL):
+        # data and occlusion term
+        for index, _ in np.ndenumerate(self.posIter):
             self.build_nodes(e, index, alpha)
 
-        # TODO: smooth term
+        # smooth term
+        for index, _ in np.ndenumerate(self.posIter):
+            for neighbor in NEIGHBORS:
+                coordP2 = coord_add(index, neighbor)
+                if inRect(coordP2, self.imSizeL):
+                    self.build_smoothness(e, index, coordP2, alpha)
 
-        for index, x in np.ndenumerate(self.imgL):
+        # uniqueness term
+        for index, _ in np.ndenumerate(self.posIter):
             self.build_uniqueness(e, index, alpha)
 
         oldEnergy = self.currentEnergy
@@ -165,17 +278,134 @@ class Match:
         return False
 
     # Graph construction
-    def build_nodes(self, energy, coordP, alpha):
-        pass
+    def build_nodes(self, ener, coordP, alpha):
+        """
+        Build nodes in graph representing data+occlusion penalty for pixel p.
+        For assignments in A^0: SOURCE means active, SINK means inactive.
+        For assignments in A^{alpha}: SOURCE means inactive, SINK means active.
+        :param ener:
+        :param coordP: index in array
+        :param alpha:
+        :return: void
+        """
+        d = self.disparityL[coordP]
+        coordQ = (coordP[0], coordP[1] + d)
+        if alpha == d:
+            # active assignment (p,p+a) in A^a will remain active
+            self.vars0[coordP] = VAR_ALPHA
+            self.varsA[coordP] = VAR_ALPHA
+            ener.add_constant(self.data_occlusion_penalty(coordP, coordQ))
+            return
 
-    def build_smoothness(self, energy, coordP, coordNp, alpha):
-        pass
+        if d != self.OCCLUDED.val:
+            self.vars0[coordP] = ener.add_variable(self.data_occlusion_penalty(coordP, coordQ), 0)
+        else:
+            self.vars0[coordP] = VAR_ABSENT
 
-    def build_uniqueness(self, energy, coordP, alpha):
-        pass
+        coordQ = (coordP[0], coordP[1] + alpha)
+        if inRect(coordQ, self.imSizeR):
+            # (p,p+a) in A^a can become active
+            self.varsA[coordP] = ener.add_variable(0, self.data_occlusion_penalty(coordP, coordQ))
+        else:
+            self.varsA[coordP] = VAR_ABSENT
 
-    def update_disparity(self, energy, alpha):
-        pass
+        return
+
+    def build_smoothness(self, ener, coordP, coordQ, alpha):
+        """
+        Build smoothness term for neighbor pixels p1 and p2 with disparity a.
+        :param ener:
+        :param coordP:
+        :param coordQ:
+        :param alpha:
+        :return:
+        """
+        d1 = self.disparityL[coordP]
+        a1 = self.varsA[coordP]
+        o1 = self.vars0[coordP]
+
+        d2 = self.disparityL[coordQ]
+        a2 = self.varsA[coordQ]
+        o2 = self.vars0[coordQ]
+
+        # disparity a
+        if a1 != VAR_ABSENT and a2 != VAR_ABSENT:
+            delta = self.smoothness_penalty(coordP, coordQ, alpha)
+            if a1 != VAR_ALPHA:
+                # (p1,p1+a) is variable
+                if a2 != VAR_ALPHA:
+                    # Penalize different activity
+                    ener.add_term2(a1, a2, 0, delta, delta, 0)
+                else:
+                    # Penalize (p1,p1+a) inactive
+                    ener.add_term1(a1, delta, 0)
+            elif a2 != VAR_ALPHA:
+                # (p1,p1+a) active, (p2,p2+a) variable
+                ener.add_term1(a2, delta, 0)  # Penalize(p2, p2 + a) inactive
+
+        # disparity d==nd!=a
+        if d1 == d2 and o1 >= 0 and o2 >= 0:
+            assert (d1 != alpha and d1 != self.OCCLUDED.val)
+            delta = self.smoothness_penalty(coordP, coordQ, d1)
+            ener.add_term2(o1, o2, 0, delta, delta, 0)  # // Penalize different activity
+
+        # disparity d1, a!=d1!=d2, (p2,p2+d1) inactive neighbor assignment
+        if d1 != d2 and o1 >= 0 and inRect((coordQ[0], coordQ[1] + d1), self.imSizeR):
+            ener.add_term1(o1, self.smoothness_penalty(coordP, coordQ, d1), 0)
+
+        # disparity d2, a!=d2!=d1, (p1,p1+d2) inactive neighbor assignment
+        if d2 != d1 and o2 >= 0 and inRect((coordP[0], coordP[1] + d2), self.imSizeR):
+            ener.add_term1(o2, self.smoothness_penalty(coordP, coordQ, d2), 0)
+
+        return
+
+    def build_uniqueness(self, ener, coordP, alpha):
+        """
+        Build edges in graph enforcing uniqueness at pixels p and p+d:
+        - Prevent (p,p+d) and (p,p+a) from being both active
+        - Prevent (p,p+d) and (p+d-alpha,p+d) from being both active.
+        :param ener:
+        :param coordP:
+        :param alpha:
+        :return: void
+        """
+        o = self.vars0[coordP]
+        if o < 0:
+            return
+
+        #  Enforce unique image of p
+        a = self.varsA[coordP]
+        if a != VAR_ABSENT:
+            ener.forbid01(o, a)
+
+        # Enforce unique antecedent of p+d
+        d = self.disparityL[coordP]
+        assert (d != self.OCCLUDED.val)
+        coordP = (coordP[0], coordP[1] + d - alpha)
+        if inRect(coordP, self.imSizeL):
+            a = self.varsA[coordP]
+            assert (a >= 0)  # not active because of current uniqueness
+            ener.forbid01(o, a)
+
+        return
+
+    def update_disparity(self, ener, alpha):
+        """
+        Update the disparity map according to min cut of energy
+        :param ener:
+        :param alpha:
+        :return: void
+        """
+        for index, o in np.ndenumerate(self.vars0):
+            if o >= 0 and ener.get_var(o) == 1:
+                self.disparityL[index] = self.OCCLUDED.val
+
+        for index, a in np.ndenumerate(self.varsA):
+            if a >= 0 and ener.get_var(a) == 1:
+                # New disparity
+                self.disparityL[index] = alpha
+
+        return
 
     def kolmogorov_zabih(self):
         # verify parameters

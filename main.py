@@ -54,6 +54,7 @@ def fix_parameters(mch, params, K, lambda_, lambda1, lambda2):
         lambda2 = lambda_
     params = set_fractions(params, K, lambda1, lambda2)
     mch.setParameters(params)
+    print("Fix parameters finished...")
     return mch
 
 
@@ -65,15 +66,15 @@ def main(file1, file2, color, dispMin, dispMax):
 
     # Default parameters
     K = -1
-    lambda_ = 4.74391
+    lambda_ = -1
     lambda1 = -1
     lambda2 = -1
-    params = match.Parameters(is_L2=True,
+    params = match.Parameters(is_L2=False,
                               denominator=1,
                               edgeThresh=8,
-                              lambda1=-1,
-                              lambda2=-1,
-                              K=-1,
+                              lambda1=lambda1,
+                              lambda2=lambda2,
+                              K=K,
                               maxIter=4)
 
     # create match instance
@@ -82,12 +83,12 @@ def main(file1, file2, color, dispMin, dispMax):
     m.SetDispRange(dispMin, dispMax)
     m = fix_parameters(m, params, K, lambda_, lambda1, lambda2)
     m.kolmogorov_zabih()
-    m.saveDisparity("./disparity.jpg")
+    m.saveDisparity("./results/disparity2.jpg")
 
 
 if __name__ == '__main__':
-    filename_left = "./images/imgL.png"
-    filename_right = "./images/imgR.png"
+    filename_left = "./images/imgL2.png"
+    filename_right = "./images/imgR2.png"
     is_color = True
     disMin = -16
     disMax = 16

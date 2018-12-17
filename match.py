@@ -2,6 +2,8 @@ import energy
 import numpy as np
 import preprocessing
 import cv2
+np.seterr(over='ignore')
+
 
 # Define global variables
 VAR_ALPHA = -1
@@ -118,7 +120,39 @@ class Match:
         return
 
     def getK(self):
-        return 23.7195
+        """heuristic"""
+        dispsize = self.dispMax - self.dispMin + 1
+        k = int((dispsize + 2) / 4)
+        if k < 3:
+            k = 3
+        array = np.ones(k)
+        sum_val = 0
+        num = 0
+        xmin = max(0, -self.dispMin)  # 0 <= x, x + dispMin
+        xmax = min(self.imSizeL[1], self.imSizeR[1] - self.dispMax)  # x < wl, x + dispMax < wr
+
+        for y in range(min(self.imSizeL[0], self.imSizeR[0])):
+            for x in range(xmin, xmax):
+                # compute k'th smallest value among data_penalty(p, p+d) for all d
+                i = 0
+                for d in range(self.dispMin, self.dispMax + 1):
+                    delta = self.data_penalty_color((y, x), (y, x + d)) if self.color else self.data_penalty_gray(
+                        (y, x), (y, x + d))
+                    if i < k:
+                        array[i] = delta
+                        i += 1
+                    else:
+                        for j in range(k):
+                            if delta < array[j]:
+                                tmp = delta
+                                delta = array[j]
+                                array[j] = tmp
+                sum_val += np.max(array)
+                num += 1
+        assert (num != 0 and sum_val != 0)
+        K = float(sum_val)/num
+        print("Computing statistics: K(data_penalty noise) = " + str(K))
+        return K
 
     def saveDisparity(self, filename):
         """
@@ -144,8 +178,8 @@ class Match:
                 im[idx[0], idx[1], 1] = c
                 im[idx[0], idx[1], 2] = c
 
-        np.save("./dispMap.npy", self.disparityL)
-        np.save("./dispImg.npy", im)
+        np.save("./results/dispMap2.npy", self.disparityL)
+        np.save("./results/dispImg2.npy", im)
         cv2.imwrite(filename, im)
         print("Save disparity map successfully !")
         return
@@ -374,8 +408,10 @@ class Match:
         # lower energy, accept the expansion move
         if self.currentEnergy < oldEnergy:
             self.update_disparity(e, alpha)
-            assert (self.ComputeEnergy() == self.currentEnergy)
+            # assert (self.ComputeEnergy() == self.currentEnergy)
             return True
+        else:
+            self.currentEnergy = oldEnergy
 
         return False
 

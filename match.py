@@ -150,7 +150,7 @@ class Match:
                 sum_val += np.max(array)
                 num += 1
         assert (num != 0 and sum_val != 0)
-        K = float(sum_val)/num
+        K = 1.*float(sum_val)/num
         print("Computing statistics: K(data_penalty noise) = " + str(K))
         return K
 
@@ -178,8 +178,8 @@ class Match:
                 im[idx[0], idx[1], 1] = c
                 im[idx[0], idx[1], 2] = c
 
-        np.save("./results/dispMap2.npy", self.disparityL)
-        np.save("./results/dispImg2.npy", im)
+        np.save("./results/dispMap4.npy", self.disparityL)
+        np.save("./results/dispImg4.npy", im)
         cv2.imwrite(filename, im)
         print("Save disparity map successfully !")
         return

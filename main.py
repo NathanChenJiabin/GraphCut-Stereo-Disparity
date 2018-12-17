@@ -69,7 +69,7 @@ def main(file1, file2, color, dispMin, dispMax):
     lambda_ = -1
     lambda1 = -1
     lambda2 = -1
-    params = match.Parameters(is_L2=False,
+    params = match.Parameters(is_L2=True,
                               denominator=1,
                               edgeThresh=8,
                               lambda1=lambda1,
@@ -83,13 +83,13 @@ def main(file1, file2, color, dispMin, dispMax):
     m.SetDispRange(dispMin, dispMax)
     m = fix_parameters(m, params, K, lambda_, lambda1, lambda2)
     m.kolmogorov_zabih()
-    m.saveDisparity("./results/disparity2.jpg")
+    m.saveDisparity("./results/disparity4.jpg")
 
 
 if __name__ == '__main__':
-    filename_left = "./images/imgL2.png"
-    filename_right = "./images/imgR2.png"
+    filename_left = "./images/imgL4.png"
+    filename_right = "./images/imgR4.png"
     is_color = True
-    disMin = -16
-    disMax = 16
+    disMin = -6
+    disMax = 2
     main(filename_left, filename_right, is_color, disMin, disMax)

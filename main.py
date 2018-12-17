@@ -33,8 +33,18 @@ def set_fractions(params, K, lambda1, lambda2):
 
 
 def fix_parameters(mch, params, K, lambda_, lambda1, lambda2):
+    """
+
+    :param mch: Match object
+    :param params:
+    :param K:
+    :param lambda_:
+    :param lambda1:
+    :param lambda2:
+    :return:
+    """
     if K < 0:
-        mch.SetParameters(params)
+        mch.setParameters(params)
         K = mch.getK()
     if lambda_ < 0:
         lambda_ = K / 5

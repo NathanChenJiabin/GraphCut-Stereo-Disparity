@@ -20,7 +20,7 @@ class Energy(object):
 
         return
 
-    def add_Variable(self, weight_s, weight_t):
+    def add_variable(self, weight_s, weight_t):
         """
         Add a new binary variable
         :param weight_s:
@@ -28,6 +28,7 @@ class Energy(object):
         :return: int, node id
         """
         node_id = self.graph.add_nodes(1)[0]
+        # print("we add node: " +str(node_id))
         self.add_term1(node_id, weight_s, weight_t)
 
         return node_id

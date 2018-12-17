@@ -97,8 +97,8 @@ class Match:
         self.currentEnergy = 0  # current energy
         self.params = None  # set of parameters
         self.disparityL = np.zeros(shape=self.imSizeL, dtype=np.int64)  # disparity map
-        self.vars0 = np.zeros(shape=self.imSizeL, dtype=np.int8)  # Variables before alpha expansion
-        self.varsA = np.zeros(shape=self.imSizeL, dtype=np.int8)  # Variables after alpha expansion
+        self.vars0 = np.zeros(shape=self.imSizeL, dtype=np.int64)  # Variables before alpha expansion
+        self.varsA = np.zeros(shape=self.imSizeL, dtype=np.int64)  # Variables after alpha expansion
         self.OCCLUDED = CONST()  # Special value of disparity meaning occlusion
 
     def SetDispRange(self, dMin, dMax):
@@ -144,6 +144,8 @@ class Match:
                 im[idx[0], idx[1], 1] = c
                 im[idx[0], idx[1], 2] = c
 
+        np.save("./dispMap.npy", self.disparityL)
+        np.save("./dispImg.npy", im)
         cv2.imwrite(filename, im)
         print("Save disparity map successfully !")
         return
@@ -154,7 +156,6 @@ class Match:
         :return: void
         """
         dispSize = self.dispMax - self.dispMin + 1
-        permutation = np.random.permutation(dispSize)  # random permutation
 
         self.currentEnergy = self.ComputeEnergy()
         print("Initial energy : " + str(self.currentEnergy))
@@ -167,6 +168,7 @@ class Match:
             if nDone <= 0:
                 break
 
+            permutation = np.random.permutation(dispSize)  # random permutation
             for idx in range(dispSize):
                 label = permutation[idx]
 
@@ -241,14 +243,14 @@ class Match:
         """
         dSum = 0
         for i in range(3):
-            Ip = self.imgColorL[coordL]
-            Iq = self.imgColorR[coordR]
+            Ip = self.imgColorL[coordL[0], coordL[1], i]
+            Iq = self.imgColorR[coordR[0], coordR[1], i]
 
-            IpMin = self.imgColorLMin[coordL]
-            IqMin = self.imgColorRMin[coordR]
+            IpMin = self.imgColorLMin[coordL[0], coordL[1], i]
+            IqMin = self.imgColorRMin[coordR[0], coordR[1], i]
 
-            IpMax = self.imgColorLMax[coordL]
-            IqMax = self.imgColorRMax[coordR]
+            IpMax = self.imgColorLMax[coordL[0], coordL[1], i]
+            IqMax = self.imgColorRMax[coordR[0], coordR[1], i]
 
             dp = dist_interval(Ip, IqMin, IqMax)
             dq = dist_interval(Iq, IpMin, IpMax)
@@ -435,6 +437,7 @@ class Match:
                 # (p1,p1+a) is variable
                 if a2 != VAR_ALPHA:
                     # Penalize different activity
+                    # print("must existe: "+str(a2))
                     ener.add_term2(a1, a2, 0, delta, delta, 0)
                 else:
                     # Penalize (p1,p1+a) inactive

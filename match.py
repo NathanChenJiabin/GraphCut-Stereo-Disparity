@@ -158,14 +158,13 @@ class Match:
         """
         save scaled disparity map as 8-bit color image (gray between 64 and 255)
         """
-        im = np.zeros(shape=(self.originalHeightL, self.imSizeL[1], 3))
-        iterP = np.zeros(shape=(self.originalHeightL, self.imSizeL[1]))
-        for idx, _ in np.ndenumerate(iterP):
-            im[idx[0], idx[1], 0] = 0
-            im[idx[0], idx[1], 1] = 255
-            im[idx[0], idx[1], 2] = 255
+        im = np.zeros(shape=(self.originalHeightL, self.imSizeL[1], 3), dtype=np.uint8)
 
-        dispSize = self.dispMax - self.dispMin + 1
+        im[:, :, 0] = 0
+        im[:, :, 1] = 255
+        im[:, :, 2] = 255
+
+        dispSize = self.dispMax - self.dispMin
         iterP = np.zeros(self.imSizeL)
         for idx, _ in np.ndenumerate(iterP):
             d = self.disparityL[idx]
@@ -173,9 +172,8 @@ class Match:
                 if dispSize == 0:
                     c = 255
                 else:
-                    # c = 255 - (255 - 64) * (self.dispMax - d) / dispSize
-                    # c = 255 - (255 - 64) * (d - self.dispMin) / dispSize
                     c = 255 * (d - self.dispMin) / dispSize
+
                 im[idx[0], idx[1], 0] = c
                 im[idx[0], idx[1], 1] = c
                 im[idx[0], idx[1], 2] = c

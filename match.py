@@ -173,13 +173,15 @@ class Match:
                 if dispSize == 0:
                     c = 255
                 else:
-                    c = 255 - (255 - 64) * (self.dispMax - d) / dispSize
+                    # c = 255 - (255 - 64) * (self.dispMax - d) / dispSize
+                    # c = 255 - (255 - 64) * (d - self.dispMin) / dispSize
+                    c = 255 * (d - self.dispMin) / dispSize
                 im[idx[0], idx[1], 0] = c
                 im[idx[0], idx[1], 1] = c
                 im[idx[0], idx[1], 2] = c
 
-        np.save("./results/dispMap4.npy", self.disparityL)
-        np.save("./results/dispImg4.npy", im)
+        np.save("./results/dispMap1.npy", self.disparityL)
+        np.save("./results/dispImg1.npy", im)
         cv2.imwrite(filename, im)
         print("Save disparity map successfully !")
         return

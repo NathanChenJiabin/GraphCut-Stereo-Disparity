@@ -202,13 +202,11 @@ def interpolate(i, imgL, imgR, disparity):
     """
     ir = np.zeros_like(imgL)
     for y in range(imgL.shape[0]):
-        for x1 in range(imgR.shape[1]):
-            x2 = int(round(x1 - disparity[y, x1]))
-            x_i = int(round((2 - i) * x1 + (i - 1) * x2))
-            if 0 <= x_i < ir.shape[1]:
+        for x1 in range(imgL.shape[1]):
+            x2 = int(x1 + disparity[y, x1])
+            x_i = int((2 - i) * x1 + (i - 1) * x2)
+            if 0 <= x_i < ir.shape[1] and 0 <= x2 < imgR.shape[1]:
                 ir[y, x_i] = (2 - i) * imgL[y, x1] + (i - 1) * imgR[y, x2]
-            else:
-                ir[y, x_i] = 0
 
     return ir
 
@@ -254,109 +252,3 @@ def deRectify(ir, theta1, theta2, T1, T2, s, i):
     return de_rectified
 
 
-def main():
-    print("Reading images...")
-    left = cv2.imread('./images/image1.jpg')
-    right = cv2.imread('./images/image2.jpg')
-
-    # left = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
-    # right = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
-    #
-    # # Initiate SIFT detector
-    # sift = cv2.xfeatures2d.SURF_create()
-    # # find the keypoints and descriptors with SIFT
-    # kp1, des1 = sift.detectAndCompute(left, None)
-    # kp2, des2 = sift.detectAndCompute(right, None)
-    #
-    # bf = cv2.BFMatcher()
-    # matches = bf.knnMatch(des1,des2, k=2)
-    # # Apply ratio test
-    # good = []
-    # for m, n in matches:
-    #     if m.distance < 0.75*n.distance:
-    #         good.append([m])
-    # img3 = np.empty((max(left.shape[0], right.shape[0]), left.shape[1] + right.shape[1], 3), dtype=np.uint8)
-    # img3 = cv2.drawMatchesKnn(left,kp1,right,kp2,good, img3, flags=2)
-    # # plt.imshow(img3)
-    # # plt.show()
-    # cv2.imwrite("knnmatch.jpg", img3)
-
-    print("Compute keypoints matching...")
-    akaze = cv2.AKAZE_create()
-    # akaze = cv2.xfeatures2d.SIFT_create()
-
-    kpts1, desc1 = akaze.detectAndCompute(left, None)
-    kpts2, desc2 = akaze.detectAndCompute(right, None)
-
-    matcher = cv2.BFMatcher(cv2.NORM_L2, True)
-
-    matches = matcher.match(desc1, desc2)
-
-    sortedmatches = sorted(matches, key=lambda x: x.distance)
-
-    nb_matches = 125
-    good_matches = sortedmatches[:nb_matches]
-
-    obj = []
-    scene = []
-
-    for i in range(len(good_matches)):
-        # -- Get the keypoints from the good matches
-        obj.append(kpts1[good_matches[i].queryIdx].pt)
-        scene.append(kpts2[good_matches[i].trainIdx].pt)
-
-    F, mask = cv2.findFundamentalMat(np.array(obj), np.array(scene), cv2.FM_RANSAC)
-
-    correct_kpts1 = []
-    correct_kpts2 = []
-    correct_matches = []
-
-    for i in range(len(mask)):
-        if mask[i, 0] > 0:
-            correct_kpts1.append(obj[i])
-            correct_kpts2.append(scene[i])
-            correct_matches.append(good_matches[i])
-
-    res = np.empty((max(left.shape[0], right.shape[0]), left.shape[1] + right.shape[1], 3), dtype=np.uint8)
-    cv2.drawMatches(left, kpts1, right, kpts2, correct_matches, res)
-    cv2.imwrite("./results/details/keypoints.jpg", res)
-    cv2.drawMatches(left, kpts1, right, kpts2, good_matches, res)
-    cv2.imwrite("./results/details/keypoints_without_RANSAC.jpg", res)
-
-    # plt.figure(figsize=(10, 10))
-    # plt.imshow(res)
-    # plt.show()
-
-
-
-    print("Computing rectification...")
-    grey1 = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
-    grey2 = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
-
-    dst1, dst2, theta1, theta2, s, T1, T2 = rectify(np.array(obj), np.array(scene), grey1, grey2)
-    cv2.imwrite("./results/details/rectify1.png", dst1)
-    cv2.imwrite("./results/details/rectify2.png", dst2)
-
-    # print("Computing disparity...")
-    # disparity = disparity_map(dst1, dst2)
-    # disparity_img = grayImage(disparity)
-    # cv2.imwrite("./results/details/disparity.png", disparity_img)
-    # print(disparity_img)
-    #
-    # print("Computing interpolation...")
-    # ir = interpolate(1.5, dst1, dst2, disparity)
-    # cv2.imwrite("./results/details/interpolated.png", ir)
-    #
-    # # ir = cv2.imread("./IR_rectified.jpg")
-    # # ir = cv2.cvtColor(ir, cv2.COLOR_BGR2GRAY)
-    # # print(ir.shape)
-    #
-    # print("Computing derectification...")
-    # de_rect = deRectify(ir, theta1, theta2, T1, T2, s, 1.5)
-    # cv2.imwrite("./results/details/derectified.png", de_rect)
-    # # print(type(grey2[100:120, 120:130]))
-    # # print(dst1[100:120, 120:130])
-
-
-if __name__ == '__main__':
-    main()
